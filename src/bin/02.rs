@@ -21,6 +21,40 @@ const TEST: &str = "\
 fn main() -> Result<()> {
     start_day(DAY);
 
+    fn valid_span(a: usize, b: usize) -> Result<bool> {
+        Ok(a.abs_diff(b) >= 1 && a.abs_diff(b) <= 3)
+    }
+
+    fn valid_orientation(a: usize, b: usize, direction: i8) -> Result<bool> {
+        Ok(match direction {
+            1 => a <= b,
+            2 => a >= b,
+            _ => true,  // No initial state yet
+        })
+    }
+
+    fn valid_level(level: Vec<String>) -> Result<bool> {
+        let instance = level.clone();
+        let mut ascending = 0;
+        let mut res = true;
+        for i in 0..instance.len() - 1 {
+            let a = instance.get(i).unwrap().parse()?;
+            let b = instance.get(i+1).unwrap().parse()?;
+            if !valid_span(a, b)? || !valid_orientation(a, b, ascending)? {
+                res = false;
+                break
+            }
+            if ascending == 0 {
+                match ascending {
+                    0 if a < b => ascending = 1,
+                    0 if a > b => ascending = 2,
+                    _ => {}
+                }
+            }
+        }
+        Ok(res)
+    }
+
     //region Part 1
     println!("=== Part 1 ===");
 
@@ -33,42 +67,8 @@ fn main() -> Result<()> {
             reactors.push(parts);
         };
 
-        // 0 initial state not ascending or descending
-        // 1 ascending
-        // 2 descending
         for level in reactors {
-            let mut state = 0;
-            let mut level_safe = true;
-            for report_group in level.iter().tuple_windows::<(_,_)>() {
-                // upper range valid
-                let report_a: usize = report_group.0.parse()?;
-                let report_b: usize = report_group.1.parse()?;
-                if report_a.abs_diff(report_b) > 3 {
-                    level_safe = false;
-                    break
-                }
-
-                if state == 0 {
-                    if report_a < report_b {
-                        state = 1;
-                    } else if report_a > report_b {
-                        state = 2
-                    } else if report_a == report_b { // initial pair is equal
-                        level_safe = false;
-                        break
-                    }
-                } else if state == 1 && report_a > report_b { // pair in ascending sort descends
-                    level_safe = false;
-                    break
-                } else if state == 2 && report_a < report_b { // pair in descending sort ascends
-                    level_safe = false;
-                    break
-                } else if report_a == report_b { // i+n pair is equal
-                    level_safe = false;
-                    break
-                }
-            }
-            if level_safe {
+            if valid_level(level)? {
                 safe += 1;
             }
         }
@@ -87,6 +87,20 @@ fn main() -> Result<()> {
     //region Part 2
     println!("\n=== Part 2 ===");
 
+    fn write_reactors_to_file(reactors: Vec<Vec<String>>, output_file: &str) -> Result<()> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        let mut file = OpenOptions::new().write(true).create(true).open(output_file)?;
+
+        for level in reactors {
+            let line = level.join(" ");
+            writeln!(file, "{}", line)?;
+        }
+
+        Ok(())
+    }
+
     fn part2<R: BufRead>(reader: R) -> Result<usize> {
         let mut safe = 0;
         let mut reactors = Vec::new();
@@ -96,44 +110,19 @@ fn main() -> Result<()> {
             reactors.push(parts);
         };
 
-        // 0 initial state not ascending or descending
-        // 1 ascending
-        // 2 descending
         for level in reactors {
-            let mut state = 0;
-            let mut fault_tolerance = 0;
-            let mut level_safe = true;
-            for report_group in level.iter().tuple_windows::<(_,_)>() {
-                // upper range valid
-                let report_a: usize = report_group.0.parse()?;
-                let report_b: usize = report_group.1.parse()?;
-                if report_a.abs_diff(report_b) > 3 {
-                    level_safe = false;
+            for i in 0..level.len() {
+                let mut l = level.clone();
+                l.remove(i);
+                if valid_level(l)? {
+                    safe += 1;
                     break
                 }
-
-                if state == 0 {
-                    if report_a < report_b {
-                        state = 1;
-                    } else if report_a > report_b {
-                        state = 2
-                    } else if report_a == report_b { // initial pair is equal
-                        fault_tolerance += 1
-                    }
-                } else if state == 1 && report_a > report_b { // pair in ascending sort descends
-                    fault_tolerance += 1
-                } else if state == 2 && report_a < report_b { // pair in descending sort ascends
-                    fault_tolerance += 1
-                } else if report_a == report_b { // i+n pair is equal
-                    fault_tolerance += 1
-                }
-            }
-            if level_safe && fault_tolerance < 2 {
-                safe += 1;
             }
         }
 
         let answer = safe;
+        // write_reactors_to_file(failed_reactors, "debug/failed_reactors.txt")?;
         Ok(answer)
     }
 
